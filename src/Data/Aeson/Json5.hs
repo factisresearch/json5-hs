@@ -132,7 +132,7 @@ numberP = do
         return $ intPart + fractionalPart
   rawNumber <- parseFractional <|> pure intPart
   let parseExponent = do
-        void $ C.char 'e'
+        void $ C.char 'e' <|> C.char 'E'
         (_sign, e) <- signedIntPositive
         return (scientific (coefficient rawNumber) (base10Exponent rawNumber + e))
   parseExponent <|> pure rawNumber
@@ -165,4 +165,4 @@ unicodeChar = do
   u2 <- fmap digitToInt C.hexDigitChar
   u3 <- fmap digitToInt C.hexDigitChar
   u4 <- fmap digitToInt C.hexDigitChar
-  return $! chr (shiftL 12 u1 .|. shiftL 8 u2 .|. shiftL 4 u3 .|. u4)
+  return $! chr (shiftL u1 12 .|. shiftL u2 8 .|. shiftL u3 4 .|. u4)
