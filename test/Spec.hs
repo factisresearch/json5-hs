@@ -1,12 +1,12 @@
 {-# LANGUAGE RecordWildCards #-}
 
-import Control.Monad
 import Control.Arrow
+import Control.Monad
 import Data.Aeson
 import Data.Aeson.Json5
+import qualified Data.ByteString as BS
 import Data.Maybe
 import qualified Data.Text.Encoding as T
-import qualified Data.ByteString as BS
 import Language.JavaScript.Inline
 import System.Directory
 import System.FilePath.Posix

@@ -156,7 +156,7 @@ chars =
     <|> try (fmap TLB.singleton unicodeChar)
     <|> fmap
       (toBuilder (Proxy @s))
-      (takeWhile1P Nothing (\c -> c /= '"' && c /= '\\' && not (isControl c)))
+      (takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
 
 unicodeChar :: ParseInput s => Parser s Char
 unicodeChar = do
