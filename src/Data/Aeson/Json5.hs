@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -20,7 +21,7 @@ import Data.Char
 import Data.Functor
 import qualified Data.HashMap.Strict as HM
 import Data.Proxy
-import Data.Scientific (Scientific)
+import Data.Scientific (Scientific, base10Exponent, coefficient, normalize, scientific)
 import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -70,10 +71,16 @@ jsonP' =
 arrayP :: ParseInput s => Parser s Array
 arrayP =
   let arrayElem = C.char ',' *> jsonP
-      nonEmptyContents = liftA2 (:) jsonP' (some arrayElem) <* jsonFiller
+      next (Just firstElem) = return (Just (firstElem, Nothing))
+      next Nothing = do
+        jsonFiller
+        fmap (fmap (,Nothing)) (optional arrayElem)
    in C.char '['
         *> jsonFiller
-        *> (fmap V.fromList nonEmptyContents <|> pure V.empty) <* C.char ']'
+        *> ( (jsonP' >>= V.unfoldrM next . Just)
+               <|> pure V.empty
+           )
+          <* C.char ']'
 
 dictP :: ParseInput s => Parser s Object
 dictP =
@@ -100,9 +107,28 @@ nullP = C.string "null" $> Null
 boolP :: ParseInput s => Parser s Bool
 boolP = C.string "true" $> True <|> C.string "false" $> False
 
-numberP :: ParseInput s => Parser s Scientific
-numberP =
-  L.signed (return ()) L.scientific
+numberP :: forall s. ParseInput s => Parser s Scientific
+numberP = do
+  let nonZeroLeadingInt :: Num i => Parser s i
+      nonZeroLeadingInt = (C.char '0' $> 0) <|> L.decimal
+  let signedInt :: Num i => Parser s i
+      signedInt = C.char '-' *> fmap negate nonZeroLeadingInt <|> nonZeroLeadingInt
+  let signedIntPositive :: Num i => Parser s i
+      signedIntPositive = C.char '+' *> nonZeroLeadingInt <|> signedInt
+  intPart <- signedInt
+  let parseFractional = do
+        C.char '.'
+        offsetBefore <- getOffset
+        fractionalInts <- L.decimal
+        offsetAfter <- getOffset
+        let fractionalPart = signum intPart * scientific fractionalInts (offsetBefore - offsetAfter)
+        return $ intPart + fractionalPart
+  rawNumber <- parseFractional <|> pure intPart
+  let parseExponent = do
+        C.char 'e'
+        e <- signedIntPositive
+        return (scientific (coefficient rawNumber) (base10Exponent rawNumber + e))
+  parseExponent <|> pure rawNumber
 
 stringP :: ParseInput s => Parser s T.Text
 stringP = C.char '"' *> go mempty

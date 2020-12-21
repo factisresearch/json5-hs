@@ -30,13 +30,12 @@ mkTests testSpec =
             assertFailure $
               "Unexpected successful parse: "
                 <> show x
-                <> "\nInput:\n"
-                <> T.unpack contents
-          (True, Left e) -> assertFailure $ "Failed parse:\n" <> e
+                <> "\ninput: " <> show contents
+          (True, Left e) -> assertFailure $ "failed parse:\n" <> e <> "\ninput: " <> show contents
           (True, Right jsonRes) ->
             case eitherDecodeStrict' (T.encodeUtf8 contents) of
               Left e -> assertFailure $ "Aeson failed to parse:\n" <> e
-              Right aesonRes -> assertEqual "" aesonRes jsonRes
+              Right aesonRes -> assertEqual ("input: " <> show contents) aesonRes jsonRes
    in testGroup (testName testSpec) [testCase "JSON" jsonTest]
 
 main :: IO ()
