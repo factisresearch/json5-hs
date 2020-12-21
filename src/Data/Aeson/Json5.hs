@@ -14,14 +14,13 @@ module Data.Aeson.Json5
   )
 where
 
-import Control.Applicative (Applicative (..))
 import Data.Aeson
 import Data.Bits
 import Data.Char
 import Data.Functor
 import qualified Data.HashMap.Strict as HM
 import Data.Proxy
-import Data.Scientific (Scientific, base10Exponent, coefficient, normalize, scientific)
+import Data.Scientific (Scientific, base10Exponent, coefficient, scientific)
 import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
@@ -87,7 +86,7 @@ dictP =
   let dictKeyPair = do
         key <- stringP
         jsonFiller
-        C.char ':'
+        void $ C.char ':'
         val <- jsonP
         return (key, val)
       dictElem = C.char ',' *> jsonFiller *> dictKeyPair
@@ -107,26 +106,34 @@ nullP = C.string "null" $> Null
 boolP :: ParseInput s => Parser s Bool
 boolP = C.string "true" $> True <|> C.string "false" $> False
 
+data Sign = Positive | Negative
+
 numberP :: forall s. ParseInput s => Parser s Scientific
 numberP = do
   let nonZeroLeadingInt :: Num i => Parser s i
       nonZeroLeadingInt = (C.char '0' $> 0) <|> L.decimal
-  let signedInt :: Num i => Parser s i
-      signedInt = C.char '-' *> fmap negate nonZeroLeadingInt <|> nonZeroLeadingInt
-  let signedIntPositive :: Num i => Parser s i
-      signedIntPositive = C.char '+' *> nonZeroLeadingInt <|> signedInt
-  intPart <- signedInt
+  let signedInt :: Num i => Parser s (Sign, i)
+      signedInt =
+        C.char '-' *> fmap ((Negative,) . negate) nonZeroLeadingInt
+          <|> fmap (Positive,) nonZeroLeadingInt
+  let signedIntPositive :: Num i => Parser s (Sign, i)
+      signedIntPositive = C.char '+' *> fmap (Positive,) nonZeroLeadingInt <|> signedInt
+  (intSign, intPart) <- signedInt
   let parseFractional = do
-        C.char '.'
+        void $ C.char '.'
         offsetBefore <- getOffset
         fractionalInts <- L.decimal
         offsetAfter <- getOffset
-        let fractionalPart = signum intPart * scientific fractionalInts (offsetBefore - offsetAfter)
+        let fractionalPartRaw = scientific fractionalInts (offsetBefore - offsetAfter)
+            fractionalPart =
+              case intSign of
+                Positive -> fractionalPartRaw
+                Negative -> negate fractionalPartRaw
         return $ intPart + fractionalPart
   rawNumber <- parseFractional <|> pure intPart
   let parseExponent = do
-        C.char 'e'
-        e <- signedIntPositive
+        void $ C.char 'e'
+        (_sign, e) <- signedIntPositive
         return (scientific (coefficient rawNumber) (base10Exponent rawNumber + e))
   parseExponent <|> pure rawNumber
 
@@ -153,7 +160,7 @@ chars =
 
 unicodeChar :: ParseInput s => Parser s Char
 unicodeChar = do
-  C.string "\\u"
+  void $ C.string "\\u"
   u1 <- fmap digitToInt C.hexDigitChar
   u2 <- fmap digitToInt C.hexDigitChar
   u3 <- fmap digitToInt C.hexDigitChar
