@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
 import Control.Monad
@@ -14,8 +15,29 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 data TestSpec = TestSpec
-  { jsonShouldParse :: Bool
+  { jsonShouldParse :: Bool,
+    testName :: String,
+    testFile :: FilePath
   }
+
+mkTests :: TestSpec -> TestTree
+mkTests testSpec =
+  let jsonTest = do
+        contents <- T.readFile (testFile testSpec)
+        case (jsonShouldParse testSpec, parseJson contents) of
+          (False, Left _e) -> return ()
+          (False, Right x) ->
+            assertFailure $
+              "Unexpected successful parse: "
+                <> show x
+                <> "\nInput:\n"
+                <> T.unpack contents
+          (True, Left e) -> assertFailure $ "Failed parse:\n" <> e
+          (True, Right jsonRes) ->
+            case eitherDecodeStrict' (T.encodeUtf8 contents) of
+              Left e -> assertFailure $ "Aeson failed to parse:\n" <> e
+              Right aesonRes -> assertEqual "" aesonRes jsonRes
+   in testGroup (testName testSpec) [testCase "JSON" jsonTest]
 
 main :: IO ()
 main =
@@ -34,31 +56,20 @@ main =
               allTests <-
                 fmap catMaybes $
                   forM allTestFiles $ \testFile -> do
-                    let testFile' = dir' </> testFile
+                    let mkTestSpec jsonShouldParse =
+                          Just
+                            TestSpec
+                              { testName = testFile,
+                                testFile = dir' </> testFile,
+                                ..
+                              }
                     let mTestSpec =
-                          case takeExtension testFile' of
-                            ".json" -> Just TestSpec {jsonShouldParse = True}
-                            ".json5" -> Just TestSpec {jsonShouldParse = False}
-                            ".txt" -> Just TestSpec {jsonShouldParse = False}
-                            ".js" -> Just TestSpec {jsonShouldParse = False}
+                          case takeExtension testFile of
+                            ".json" -> mkTestSpec True
+                            ".json5" -> mkTestSpec False
+                            ".txt" -> mkTestSpec False
+                            ".js" -> mkTestSpec False
                             ext -> Nothing
-                    let mkTests testSpec =
-                          let jsonTest = do
-                                contents <- T.readFile testFile'
-                                case (jsonShouldParse testSpec, parseJson contents) of
-                                  (False, Left _e) -> return ()
-                                  (False, Right x) ->
-                                    assertFailure $
-                                      "Unexpected successful parse: "
-                                        <> show x
-                                        <> "\nInput:\n"
-                                        <> T.unpack contents
-                                  (True, Left e) -> assertFailure $ "Failed parse:\n" <> e
-                                  (True, Right jsonRes) ->
-                                    case eitherDecodeStrict' (T.encodeUtf8 contents) of
-                                      Left e -> assertFailure $ "Aeson failed to parse:\n" <> e
-                                      Right aesonRes -> assertEqual "" aesonRes jsonRes
-                           in testGroup testFile [testCase "JSON" jsonTest]
                     return . fmap mkTests $ mTestSpec
               return . Just $ testGroup dir allTests
     defaultMain $ testGroup "json5-tests" allTestGroups
