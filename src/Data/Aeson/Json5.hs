@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -14,10 +15,10 @@ import Data.Aeson
 import qualified Data.HashMap.Strict as HM
 import Data.Scientific (Scientific)
 import Data.String
+import qualified Data.Text as T
 import qualified Data.Vector as V
 import Data.Void
 import Text.Megaparsec
-import qualified Data.Text as T
 import qualified Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -64,10 +65,15 @@ dictP =
         val <- jsonP
         return (key, val)
       dictElem = C.char ',' *> jsonFiller *> dictKeyPair
-      nonEmptyContents = liftA2 (:) dictKeyPair (many dictElem) <* jsonFiller
+      nonEmptyContents !acc = do
+        jsonFiller
+        (dictElem >>= nonEmptyContents . flip (:) acc)
+          <|> (C.char '}' *> pure (HM.fromList acc))
    in C.char '{'
         *> jsonFiller
-        *> (fmap HM.fromList nonEmptyContents <|> pure HM.empty) <* C.char '}'
+        *> ( (dictKeyPair >>= nonEmptyContents . (:[]))
+               <|> pure HM.empty <* C.char '}'
+           )
 
 nullP :: StreamContstraint s => Parser s Value
 nullP = C.string "null" *> pure Null
