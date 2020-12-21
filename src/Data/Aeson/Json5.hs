@@ -52,7 +52,13 @@ instance c ~ Char => ParseInput [c] where
 type Parser s a = Parsec Void s a
 
 jsonFiller :: ParseInput s => Parser s ()
-jsonFiller = C.space
+jsonFiller =
+  skipMany . oneOf . map chr $
+    [ 0x20,
+      0x09,
+      0x0A,
+      0x0D
+    ]
 
 jsonP :: ParseInput s => Parser s Value
 jsonP =
