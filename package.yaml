@@ -24,6 +24,9 @@ dependencies:
 - megaparsec >= 8.0.0
 - aeson >= 1.4.0.0
 - scientific >= 0.3
+- vector >= 0.12
+- unordered-containers >= 0.2
+- text >= 1.2
 
 library:
   source-dirs: src
@@ -43,4 +46,4 @@ tests:
     - inline-js >= 0.0.1.0
     - tasty >= 1.2
     - tasty-hunit >= 0.10
-    - text >= 1.2.0.0
+    - text >= 1.2
