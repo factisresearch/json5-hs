@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 import Control.Arrow
@@ -28,19 +29,28 @@ data TestMode
 
 mkTests :: TestSpec -> TestTree
 mkTests testSpec =
-  let jsonTest = testCase "JSON" $ do
+  let jsonShouldParse = testMode testSpec == JSON
+      validate bs jsonRes =
+        case testMode testSpec of
+          JSON ->
+            case eitherDecodeStrict' bs of
+              Left e -> assertFailure $ "Aeson failed to parse:\n" <> e
+              Right aesonRes -> assertEqual ("input: " <> show bs) aesonRes jsonRes
+          _ -> do
+            Just ctx <- createDuktapeCtx
+            mRes <- evalDuktape ctx $ "(" <> bs <> ")"
+            case mRes of
+              Right (Just res) -> assertEqual "" res jsonRes
+              _ -> assertFailure $ "Duktape failed: " <> show mRes
+      jsonTest = testCase "JSON" $ do
         bs <- BS.readFile (testFile testSpec)
-        let jsonShouldParse = testMode testSpec == JSON
         case (jsonShouldParse, parseJson =<< left show (T.decodeUtf8' bs)) of
           (False, Left _e) -> return ()
           (False, Right x) ->
             assertFailure $
               "Unexpected successful parse: " <> show x <> "\ninput: " <> show bs
           (True, Left e) -> assertFailure $ "failed parse:\n" <> e <> "\ninput: " <> show bs
-          (True, Right jsonRes) ->
-            case eitherDecodeStrict' bs of
-              Left e -> assertFailure $ "Aeson failed to parse:\n" <> e
-              Right aesonRes -> assertEqual ("input: " <> show bs) aesonRes jsonRes
+          (True, Right jsonRes) -> validate bs jsonRes
       mJson5ShoulddParse =
         case testMode testSpec of
           JSON -> Just True
@@ -55,10 +65,7 @@ mkTests testSpec =
             assertFailure $
               "Unexpected successful parse: " <> show x <> "\ninput: " <> show bs
           (True, Left e) -> assertFailure $ "failed parse:\n" <> e <> "\ninput: " <> show bs
-          (True, Right json5Res) -> do
-            Just ctx <- createDuktapeCtx
-            Right (Just res) <- evalDuktape ctx bs
-            assertEqual "" res json5Res
+          (True, Right jsonRes) -> validate bs jsonRes
    in testGroup (testName testSpec) (catMaybes [Just jsonTest, mJson5Test])
 
 json5Tests :: IO TestTree

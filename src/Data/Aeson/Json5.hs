@@ -115,7 +115,10 @@ arrayP mode =
 dictP :: ParseInput s => ParseMode -> Parser s Object
 dictP mode =
   let dictKeyPair = do
-        key <- stringP
+        key <-
+          case mode of
+            JSON -> stringP
+            JSON5 -> stringP <|> identifyerNameP
         jsonFiller mode
         void $ C.char ':'
         val <- jsonP mode
@@ -130,6 +133,14 @@ dictP mode =
         *> ( (dictKeyPair >>= nonEmptyContents . (: []))
                <|> HM.empty <$ C.char '}'
            )
+
+identifyerNameP :: ParseInput s => Parser s T.Text
+identifyerNameP = do
+  let identifyerStart = C.letterChar <|> oneOf ("$_"::String) <|> unicodeChar
+      identifierPart = identifyerStart <|> C.digitChar
+  first <- identifyerStart
+  rest <- many identifierPart
+  return . T.pack $ first : rest
 
 nullP :: ParseInput s => Parser s Value
 nullP = C.string "null" $> Null
