@@ -38,7 +38,7 @@ mkTests testSpec =
               Right aesonRes -> assertEqual ("input: " <> show bs) aesonRes jsonRes
           _ -> do
             Just ctx <- createDuktapeCtx
-            mRes <- evalDuktape ctx $ "(" <> bs <> ")"
+            mRes <- evalDuktape ctx $ "(" <> bs <> "\n)"
             case mRes of
               Right (Just res) -> assertEqual "" res jsonRes
               _ -> assertFailure $ "Duktape failed: " <> show mRes

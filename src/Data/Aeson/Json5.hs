@@ -62,22 +62,20 @@ type Parser s a = Parsec Void s a
 
 jsonFiller :: ParseInput s => ParseMode -> Parser s ()
 jsonFiller mode =
-  case mode of
-    JSON ->
-      skipMany . oneOf . map chr $
-        [ 0x20,
-          0x09,
-          0x0A,
-          0x0D
-        ]
-    JSON5 ->
-      -- FIXME
-      skipMany . oneOf . map chr $
-        [ 0x20,
-          0x09,
-          0x0A,
-          0x0D
-        ]
+  let jsonSpace =
+        oneOf . map chr $
+          [ 0x20,
+            0x09,
+            0x0A,
+            0x0D
+          ]
+   in case mode of
+        JSON -> skipMany jsonSpace
+        JSON5 ->
+          L.space
+            (skipSome jsonSpace)
+            (L.skipLineComment "//")
+            (L.skipBlockComment "/*" "*/")
 
 jsonP :: ParseInput s => ParseMode -> Parser s Value
 jsonP mode =
@@ -136,7 +134,7 @@ dictP mode =
 
 identifyerNameP :: ParseInput s => Parser s T.Text
 identifyerNameP = do
-  let identifyerStart = C.letterChar <|> oneOf ("$_"::String) <|> unicodeChar
+  let identifyerStart = C.letterChar <|> oneOf ("$_" :: String) <|> unicodeChar
       identifierPart = identifyerStart <|> C.digitChar
   first <- identifyerStart
   rest <- many identifierPart
