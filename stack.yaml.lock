@@ -5,31 +5,12 @@
 
 packages:
 - completed:
-    subdir: inline-js
-    name: inline-js
-    version: 0.0.1.0
-    git: https://github.com/tweag/inline-js.git
+    hackage: hs-duktape-1.0.0@sha256:cf0ff26f96ef5a79d9e8230d5e6eef296dd1bee306151a2e4f133a05e2ab469b,1866
     pantry-tree:
-      size: 567
-      sha256: 3a35ca0a97e12fb3d873af7ae6f79cf914a18045f7294255bfafebe35c26eabc
-    commit: ef675745e84d23d51c50660d40acf9e684fbb2d6
+      size: 747
+      sha256: 7139ff5aea172a26d5724769a9ae75fb3738dbc9038ec4d6a89fa5f79b6e9872
   original:
-    subdir: inline-js
-    git: https://github.com/tweag/inline-js.git
-    commit: ef675745e84d23d51c50660d40acf9e684fbb2d6
-- completed:
-    subdir: inline-js-core
-    name: inline-js-core
-    version: 0.0.1.0
-    git: https://github.com/tweag/inline-js.git
-    pantry-tree:
-      size: 1521
-      sha256: cc30d1bbd5a1d49d5f1f616a05abb9328279e415f557f104344d173db953cd2d
-    commit: ef675745e84d23d51c50660d40acf9e684fbb2d6
-  original:
-    subdir: inline-js-core
-    git: https://github.com/tweag/inline-js.git
-    commit: ef675745e84d23d51c50660d40acf9e684fbb2d6
+    hackage: hs-duktape-1.0.0
 snapshots:
 - completed:
     size: 533252

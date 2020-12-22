@@ -11,6 +11,7 @@
 
 module Data.Aeson.Json5
   ( parseJson,
+    parseJson5,
   )
 where
 
@@ -31,9 +32,17 @@ import Text.Megaparsec
 import qualified Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
 
+data ParseMode = JSON | JSON5
+
 parseJson :: ParseInput s => s -> Either String Value
-parseJson s =
-  case runParser (jsonP <* jsonFiller <* eof) "" s of
+parseJson = parseJson' JSON
+
+parseJson5 :: ParseInput s => s -> Either String Value
+parseJson5 = parseJson' JSON5
+
+parseJson' :: ParseInput s => ParseMode -> s -> Either String Value
+parseJson' mode s =
+  case runParser (jsonP mode <* jsonFiller mode <* eof) "" s of
     Left e -> Left (errorBundlePretty e)
     Right x -> Right x
 
@@ -51,57 +60,73 @@ instance c ~ Char => ParseInput [c] where
 
 type Parser s a = Parsec Void s a
 
-jsonFiller :: ParseInput s => Parser s ()
-jsonFiller =
-  skipMany . oneOf . map chr $
-    [ 0x20,
-      0x09,
-      0x0A,
-      0x0D
-    ]
+jsonFiller :: ParseInput s => ParseMode -> Parser s ()
+jsonFiller mode =
+  case mode of
+    JSON ->
+      skipMany . oneOf . map chr $
+        [ 0x20,
+          0x09,
+          0x0A,
+          0x0D
+        ]
+    JSON5 ->
+      -- FIXME
+      skipMany . oneOf . map chr $
+        [ 0x20,
+          0x09,
+          0x0A,
+          0x0D
+        ]
 
-jsonP :: ParseInput s => Parser s Value
-jsonP =
-  jsonFiller *> jsonP'
+jsonP :: ParseInput s => ParseMode -> Parser s Value
+jsonP mode =
+  jsonFiller mode *> jsonP' mode
 
-jsonP' :: ParseInput s => Parser s Value
-jsonP' =
+jsonP' :: ParseInput s => ParseMode -> Parser s Value
+jsonP' mode =
   Number <$> numberP
     <|> nullP
     <|> Bool <$> boolP
     <|> String <$> stringP
-    <|> Array <$> arrayP
-    <|> Object <$> dictP
+    <|> Array <$> arrayP mode
+    <|> Object <$> dictP mode
 
-arrayP :: ParseInput s => Parser s Array
-arrayP =
-  let arrayElem = C.char ',' *> jsonP
-      next (Just firstElem) = return (Just (firstElem, Nothing))
+arrayP :: ParseInput s => ParseMode -> Parser s Array
+arrayP mode =
+  let next (Just firstElem) = return (Just (firstElem, Nothing))
       next Nothing = do
-        jsonFiller
-        fmap (fmap (,Nothing)) (optional arrayElem)
+        jsonFiller mode
+        fmap (fmap (,Nothing)) $
+          case mode of
+            JSON -> optional (C.char ',' *> jsonP JSON <* jsonFiller JSON)
+            JSON5 -> do
+              mC <- optional $ C.char ',' *> jsonFiller JSON5
+              case mC of
+                Nothing -> return Nothing
+                Just _ -> optional $ jsonP' JSON5 <* jsonFiller JSON5
    in C.char '['
-        *> jsonFiller
-        *> ( (jsonP' >>= V.unfoldrM next . Just)
+        *> jsonFiller mode
+        *> ( (jsonP' mode >>= V.unfoldrM next . Just)
                <|> pure V.empty
            )
           <* C.char ']'
 
-dictP :: ParseInput s => Parser s Object
-dictP =
+dictP :: ParseInput s => ParseMode -> Parser s Object
+dictP mode =
   let dictKeyPair = do
         key <- stringP
-        jsonFiller
+        jsonFiller mode
         void $ C.char ':'
-        val <- jsonP
+        val <- jsonP mode
         return (key, val)
-      dictElem = C.char ',' *> jsonFiller *> dictKeyPair
+      dictElem = C.char ',' *> jsonFiller mode *> dictKeyPair
       nonEmptyContents !acc = do
-        jsonFiller
+        jsonFiller mode
         (dictElem >>= nonEmptyContents . flip (:) acc)
           <|> (C.char '}' $> HM.fromList acc)
    in C.char '{'
-        *> jsonFiller
+        *> jsonFiller mode
         *> ( (dictKeyPair >>= nonEmptyContents . (: []))
                <|> HM.empty <$ C.char '}'
            )
@@ -151,15 +176,15 @@ stringP = C.char '"' *> go mempty
 
 chars :: forall s. ParseInput s => Parser s TLB.Builder
 chars =
-  try (C.string "\\\"" $> "\"")
-    <|> try (C.string "\\\\" $> "\\")
-    <|> try (C.string "\\/" $> "/")
-    <|> try (C.string "\\b" $> "\b")
-    <|> try (C.string "\\f" $> "\f")
-    <|> try (C.string "\\n" $> "\n")
-    <|> try (C.string "\\r" $> "\r")
-    <|> try (C.string "\\t" $> "\t")
-    <|> try (fmap TLB.singleton unicodeChar)
+  (C.string "\\\"" $> "\"")
+    <|> (C.string "\\\\" $> "\\")
+    <|> (C.string "\\/" $> "/")
+    <|> (C.string "\\b" $> "\b")
+    <|> (C.string "\\f" $> "\f")
+    <|> (C.string "\\n" $> "\n")
+    <|> (C.string "\\r" $> "\r")
+    <|> (C.string "\\t" $> "\t")
+    <|> fmap TLB.singleton unicodeChar
     <|> fmap
       (toBuilder (Proxy @s))
       (takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
