@@ -121,11 +121,19 @@ dictP mode =
         void $ C.char ':'
         val <- jsonP mode
         return (key, val)
-      dictElem = C.char ',' *> jsonFiller mode *> dictKeyPair
       nonEmptyContents !acc = do
         jsonFiller mode
-        (dictElem >>= nonEmptyContents . flip (:) acc)
-          <|> (C.char '}' $> HM.fromList acc)
+        let closing = C.char '}' $> HM.fromList acc
+        case mode of
+          JSON ->
+            (C.char ',' *> jsonFiller JSON *> dictKeyPair >>= nonEmptyContents . flip (:) acc)
+              <|> closing
+          JSON5 -> do
+              mC <- optional $ C.char ',' *> jsonFiller JSON5
+              case mC of
+                Nothing -> closing
+                Just _ -> (dictKeyPair >>= nonEmptyContents . flip (:) acc) <|> closing
+
    in C.char '{'
         *> jsonFiller mode
         *> ( (dictKeyPair >>= nonEmptyContents . (: []))
@@ -183,7 +191,7 @@ stringP :: ParseInput s => ParseMode -> Parser s T.Text
 stringP mode =
   case mode of
     JSON -> C.char '"' *> go StringJSON mempty
-    JSON5 -> (C.char '"' *> go StringDouble mempty) <|>  (C.char '\'' *> go StringSingle mempty)
+    JSON5 -> (C.char '"' *> go StringDouble mempty) <|> (C.char '\'' *> go StringSingle mempty)
   where
     go stringMode !acc =
       case stringMode of
@@ -213,9 +221,9 @@ charsJSON =
 singleCharJSON5 :: ParseInput s => Parser s TLB.Builder
 singleCharJSON5 =
   singleCharJSON
-  <|> (C.string "\\\'" $> "\'")
-  <|> (C.string "\\\0" $> "\0")
-  <|> (C.string "\\\v" $> "\v")
+    <|> (C.string "\\\'" $> "\'")
+    <|> (C.string "\\\0" $> "\0")
+    <|> (C.string "\\\v" $> "\v")
 
 charsDouble :: forall s. ParseInput s => Parser s TLB.Builder
 charsDouble =
