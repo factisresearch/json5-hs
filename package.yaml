@@ -23,6 +23,7 @@ dependencies:
 - base >= 4.7 && < 5
 - aeson >= 1.4.0.0
 - megaparsec >= 8.0.0
+- case-insensitive >= 1.2
 - scientific >= 0.3
 - text >= 1.2
 - unordered-containers >= 0.2

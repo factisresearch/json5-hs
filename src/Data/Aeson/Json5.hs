@@ -16,6 +16,7 @@ module Data.Aeson.Json5
 where
 
 import Data.Aeson
+import Data.CaseInsensitive
 import Data.Bits
 import Data.Char
 import Data.Functor
@@ -46,7 +47,7 @@ parseJson' mode s =
     Left e -> Left (errorBundlePretty e)
     Right x -> Right x
 
-class (Stream s, Token s ~ Char, IsString (Tokens s)) => ParseInput s where
+class (Stream s, Token s ~ Char, IsString (Tokens s), FoldCase (Tokens  s)) => ParseInput s where
   toBuilder :: Proxy s -> Tokens s -> TLB.Builder
 
 instance ParseInput T.Text where
@@ -83,7 +84,7 @@ jsonP mode =
 
 jsonP' :: ParseInput s => ParseMode -> Parser s Value
 jsonP' mode =
-  Number <$> numberP
+  Number <$> numberP mode
     <|> nullP
     <|> Bool <$> boolP
     <|> String <$> stringP mode
@@ -156,8 +157,17 @@ boolP = C.string "true" $> True <|> C.string "false" $> False
 
 data Sign = Positive | Negative
 
-numberP :: forall s. ParseInput s => Parser s Scientific
-numberP = do
+numberP :: forall s. ParseInput s => ParseMode -> Parser s Scientific
+numberP mode =
+  case mode of
+    JSON -> numberRegular JSON
+    JSON5 ->
+      (C.string' "0x" *> L.hexadecimal)
+      <|> (C.string' "-0x" *> fmap negate L.hexadecimal)
+      <|> numberRegular mode
+
+numberRegular :: forall s. ParseInput s => ParseMode -> Parser s Scientific
+numberRegular _mode = do
   let nonZeroLeadingInt :: Num i => Parser s i
       nonZeroLeadingInt = (C.char '0' $> 0) <|> L.decimal
   let signedInt :: Num i => Parser s (Sign, i)
