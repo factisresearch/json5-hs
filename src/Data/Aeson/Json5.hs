@@ -224,6 +224,9 @@ singleCharJSON5 =
     <|> (C.string "\\\'" $> "\'")
     <|> (C.string "\\\0" $> "\0")
     <|> (C.string "\\\v" $> "\v")
+    <|> (C.string "\\\r\n" $> "")
+    <|> (C.string "\\\r" $> "")
+    <|> (C.string "\\\n" $> "")
 
 charsDouble :: forall s. ParseInput s => Parser s TLB.Builder
 charsDouble =
