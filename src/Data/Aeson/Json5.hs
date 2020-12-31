@@ -86,7 +86,7 @@ jsonP' mode =
   Number <$> numberP
     <|> nullP
     <|> Bool <$> boolP
-    <|> String <$> stringP
+    <|> String <$> stringP mode
     <|> Array <$> arrayP mode
     <|> Object <$> dictP mode
 
@@ -115,8 +115,8 @@ dictP mode =
   let dictKeyPair = do
         key <-
           case mode of
-            JSON -> stringP
-            JSON5 -> stringP <|> identifyerNameP
+            JSON -> stringP JSON
+            JSON5 -> stringP JSON5 <|> identifyerNameP
         jsonFiller mode
         void $ C.char ':'
         val <- jsonP mode
@@ -177,14 +177,22 @@ numberP = do
         return (scientific (coefficient rawNumber) (base10Exponent rawNumber + e))
   parseExponent <|> pure rawNumber
 
-stringP :: ParseInput s => Parser s T.Text
-stringP = C.char '"' *> go mempty
-  where
-    go !acc =
-      (C.char '"' $> TL.toStrict (TLB.toLazyText acc)) <|> (chars >>= go . (acc <>))
+data StringMode = StringJSON | StringSingle | StringDouble
 
-chars :: forall s. ParseInput s => Parser s TLB.Builder
-chars =
+stringP :: ParseInput s => ParseMode -> Parser s T.Text
+stringP mode =
+  case mode of
+    JSON -> C.char '"' *> go StringJSON mempty
+    JSON5 -> (C.char '"' *> go StringDouble mempty) <|>  (C.char '\'' *> go StringSingle mempty)
+  where
+    go stringMode !acc =
+      case stringMode of
+        StringJSON -> (C.char '"' $> TL.toStrict (TLB.toLazyText acc)) <|> (charsJSON >>= go stringMode . (acc <>))
+        StringDouble -> (C.char '"' $> TL.toStrict (TLB.toLazyText acc)) <|> (charsDouble >>= go stringMode . (acc <>))
+        StringSingle -> (C.char '\'' $> TL.toStrict (TLB.toLazyText acc)) <|> (charsSingle >>= go stringMode . (acc <>))
+
+singleCharJSON :: ParseInput s => Parser s TLB.Builder
+singleCharJSON =
   (C.string "\\\"" $> "\"")
     <|> (C.string "\\\\" $> "\\")
     <|> (C.string "\\/" $> "/")
@@ -194,9 +202,34 @@ chars =
     <|> (C.string "\\r" $> "\r")
     <|> (C.string "\\t" $> "\t")
     <|> fmap TLB.singleton unicodeChar
+
+charsJSON :: forall s. ParseInput s => Parser s TLB.Builder
+charsJSON =
+  singleCharJSON
     <|> fmap
       (toBuilder (Proxy @s))
       (takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
+
+singleCharJSON5 :: ParseInput s => Parser s TLB.Builder
+singleCharJSON5 =
+  singleCharJSON
+  <|> (C.string "\\\'" $> "\'")
+  <|> (C.string "\\\0" $> "\0")
+  <|> (C.string "\\\v" $> "\v")
+
+charsDouble :: forall s. ParseInput s => Parser s TLB.Builder
+charsDouble =
+  singleCharJSON5
+    <|> fmap
+      (toBuilder (Proxy @s))
+      (takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
+
+charsSingle :: forall s. ParseInput s => Parser s TLB.Builder
+charsSingle =
+  singleCharJSON5
+    <|> fmap
+      (toBuilder (Proxy @s))
+      (takeWhile1P Nothing (\c -> not (c == '\'' || c == '\\' || (c <= chr 0x1f && isControl c))))
 
 unicodeChar :: ParseInput s => Parser s Char
 unicodeChar = do
