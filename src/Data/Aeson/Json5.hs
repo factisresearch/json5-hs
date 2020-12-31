@@ -63,18 +63,18 @@ type Parser s a = Parsec Void s a
 jsonFiller :: ParseInput s => ParseMode -> Parser s ()
 jsonFiller mode =
   let jsonSpace =
-        oneOf . map chr $
-          [ 0x20,
-            0x09,
-            0x0A,
-            0x0D
+        oneOf
+          [ ' ',
+            '\t',
+            '\n',
+            '\r'
           ]
    in case mode of
         JSON -> skipMany jsonSpace
         JSON5 ->
           L.space
             (skipSome jsonSpace)
-            (L.skipLineComment "//")
+            (C.string "//" *> void (takeWhileP (Just "character") (\c -> c /= '\n' && c /= '\r')))
             (L.skipBlockComment "/*" "*/")
 
 jsonP :: ParseInput s => ParseMode -> Parser s Value
