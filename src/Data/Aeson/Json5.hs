@@ -178,18 +178,29 @@ signP mode =
     AllowPositive -> (C.string "-" $> negate) <|> (C.string "+" $> id) <|> pure id
 
 numberRegular :: forall s. ParseInput s => ParseMode -> Parser s Scientific
-numberRegular _mode = do
+numberRegular mode = do
   let nonZeroLeadingInt :: Num i => Parser s i
       nonZeroLeadingInt = (C.char '0' $> 0) <|> L.decimal
-  intPart <- nonZeroLeadingInt
   let parseFractional = do
-        void $ C.char '.'
         offsetBefore <- getOffset
         fractionalInts <- L.decimal
         offsetAfter <- getOffset
         let fractionalPart = scientific fractionalInts (offsetBefore - offsetAfter)
-        return $ intPart + fractionalPart
-  rawNumber <- parseFractional <|> pure intPart
+        return fractionalPart
+  rawNumber <-
+    case mode of
+      JSON -> do
+        intPart <- nonZeroLeadingInt
+        fmap (+ intPart) (C.char '.' *> parseFractional) <|> pure intPart
+      JSON5 -> do
+        let withIntPart = do
+              intPart <- nonZeroLeadingInt
+              mC <- optional $ C.char '.'
+              case mC of
+                Nothing -> pure intPart
+                Just _ ->
+                  fmap (+ intPart) parseFractional <|> pure intPart
+        withIntPart <|> (C.char '.' *> parseFractional)
   let parseExponent = do
         void $ C.char 'e' <|> C.char 'E'
         signE <- signP AllowPositive
