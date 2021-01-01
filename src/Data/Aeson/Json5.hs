@@ -16,8 +16,8 @@ module Data.Aeson.Json5
 where
 
 import Data.Aeson
-import Data.CaseInsensitive
 import Data.Bits
+import Data.CaseInsensitive
 import Data.Char
 import Data.Functor
 import qualified Data.HashMap.Strict as HM
@@ -47,7 +47,7 @@ parseJson' mode s =
     Left e -> Left (errorBundlePretty e)
     Right x -> Right x
 
-class (Stream s, Token s ~ Char, IsString (Tokens s), FoldCase (Tokens  s)) => ParseInput s where
+class (Stream s, Token s ~ Char, IsString (Tokens s), FoldCase (Tokens s)) => ParseInput s where
   toBuilder :: Proxy s -> Tokens s -> TLB.Builder
 
 instance ParseInput T.Text where
@@ -130,11 +130,10 @@ dictP mode =
             (C.char ',' *> jsonFiller JSON *> dictKeyPair >>= nonEmptyContents . flip (:) acc)
               <|> closing
           JSON5 -> do
-              mC <- optional $ C.char ',' *> jsonFiller JSON5
-              case mC of
-                Nothing -> closing
-                Just _ -> (dictKeyPair >>= nonEmptyContents . flip (:) acc) <|> closing
-
+            mC <- optional $ C.char ',' *> jsonFiller JSON5
+            case mC of
+              Nothing -> closing
+              Just _ -> (dictKeyPair >>= nonEmptyContents . flip (:) acc) <|> closing
    in C.char '{'
         *> jsonFiller mode
         *> ( (dictKeyPair >>= nonEmptyContents . (: []))
@@ -156,13 +155,19 @@ boolP :: ParseInput s => Parser s Bool
 boolP = C.string "true" $> True <|> C.string "false" $> False
 
 numberP :: forall s. ParseInput s => ParseMode -> Parser s Scientific
-numberP mode =
-  case mode of
-    JSON -> numberRegular JSON
-    JSON5 ->
-      (C.string' "0x" *> L.hexadecimal)
-      <|> (C.string' "-0x" *> fmap negate L.hexadecimal)
-      <|> numberRegular mode
+numberP mode = do
+  let signMode =
+        case mode of
+          JSON -> OnlyNegative
+          JSON5 -> AllowPositive
+  sign <- signP signMode
+  fmap sign $
+    case mode of
+      JSON -> numberRegular JSON
+      JSON5 ->
+        (C.string' "0x" *> L.hexadecimal)
+          <|> (C.string' "-0x" *> fmap negate L.hexadecimal)
+          <|> numberRegular JSON5
 
 data SignMode = OnlyNegative | AllowPositive
 
@@ -173,14 +178,9 @@ signP mode =
     AllowPositive -> (C.string "-" $> negate) <|> (C.string "+" $> id) <|> pure id
 
 numberRegular :: forall s. ParseInput s => ParseMode -> Parser s Scientific
-numberRegular mode = do
+numberRegular _mode = do
   let nonZeroLeadingInt :: Num i => Parser s i
       nonZeroLeadingInt = (C.char '0' $> 0) <|> L.decimal
-  let signMode =
-        case mode of
-          JSON -> OnlyNegative
-          JSON5 -> AllowPositive
-  sign <- signP signMode
   intPart <- nonZeroLeadingInt
   let parseFractional = do
         void $ C.char '.'
@@ -189,8 +189,7 @@ numberRegular mode = do
         offsetAfter <- getOffset
         let fractionalPart = scientific fractionalInts (offsetBefore - offsetAfter)
         return $ intPart + fractionalPart
-  rawNumberUnsigned <- parseFractional <|> pure intPart
-  let rawNumber = sign rawNumberUnsigned
+  rawNumber <- parseFractional <|> pure intPart
   let parseExponent = do
         void $ C.char 'e' <|> C.char 'E'
         signE <- signP AllowPositive
