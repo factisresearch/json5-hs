@@ -155,8 +155,6 @@ nullP = C.string "null" $> Null
 boolP :: ParseInput s => Parser s Bool
 boolP = C.string "true" $> True <|> C.string "false" $> False
 
-data Sign = Positive | Negative
-
 numberP :: forall s. ParseInput s => ParseMode -> Parser s Scientific
 numberP mode =
   case mode of
@@ -166,32 +164,38 @@ numberP mode =
       <|> (C.string' "-0x" *> fmap negate L.hexadecimal)
       <|> numberRegular mode
 
+data SignMode = OnlyNegative | AllowPositive
+
+signP :: (ParseInput s, Num a) => SignMode -> Parser s (a -> a)
+signP mode =
+  case mode of
+    OnlyNegative -> (C.string "-" $> negate) <|> pure id
+    AllowPositive -> (C.string "-" $> negate) <|> (C.string "+" $> id) <|> pure id
+
 numberRegular :: forall s. ParseInput s => ParseMode -> Parser s Scientific
-numberRegular _mode = do
+numberRegular mode = do
   let nonZeroLeadingInt :: Num i => Parser s i
       nonZeroLeadingInt = (C.char '0' $> 0) <|> L.decimal
-  let signedInt :: Num i => Parser s (Sign, i)
-      signedInt =
-        C.char '-' *> fmap ((Negative,) . negate) nonZeroLeadingInt
-          <|> fmap (Positive,) nonZeroLeadingInt
-  let signedIntPositive :: Num i => Parser s (Sign, i)
-      signedIntPositive = C.char '+' *> fmap (Positive,) nonZeroLeadingInt <|> signedInt
-  (intSign, intPart) <- signedInt
+  let signMode =
+        case mode of
+          JSON -> OnlyNegative
+          JSON5 -> AllowPositive
+  sign <- signP signMode
+  intPart <- nonZeroLeadingInt
   let parseFractional = do
         void $ C.char '.'
         offsetBefore <- getOffset
         fractionalInts <- L.decimal
         offsetAfter <- getOffset
-        let fractionalPartRaw = scientific fractionalInts (offsetBefore - offsetAfter)
-            fractionalPart =
-              case intSign of
-                Positive -> fractionalPartRaw
-                Negative -> negate fractionalPartRaw
+        let fractionalPart = scientific fractionalInts (offsetBefore - offsetAfter)
         return $ intPart + fractionalPart
-  rawNumber <- parseFractional <|> pure intPart
+  rawNumberUnsigned <- parseFractional <|> pure intPart
+  let rawNumber = sign rawNumberUnsigned
   let parseExponent = do
         void $ C.char 'e' <|> C.char 'E'
-        (_sign, e) <- signedIntPositive
+        signE <- signP AllowPositive
+        rawE <- nonZeroLeadingInt
+        let e = signE rawE
         return (scientific (coefficient rawNumber) (base10Exponent rawNumber + e))
   parseExponent <|> pure rawNumber
 
