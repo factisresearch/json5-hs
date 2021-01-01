@@ -70,11 +70,25 @@ jsonFiller mode =
             '\n',
             '\r'
           ]
+      json5Space =
+        oneOf . fmap chr $
+          [ 0x9,
+            0xa,
+            0xb,
+            0xc,
+            0xd,
+            0x20,
+            0xa0,
+            0xa0,
+            0x2028,
+            0x2029,
+            0xfeff
+          ]
    in case mode of
         JSON -> skipMany jsonSpace
         JSON5 ->
           L.space
-            (skipSome jsonSpace)
+            (skipSome json5Space)
             (C.string "//" *> void (takeWhileP (Just "character") (\c -> c /= '\n' && c /= '\r')))
             (L.skipBlockComment "/*" "*/")
 
