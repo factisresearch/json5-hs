@@ -35,9 +35,15 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 data ParseMode = JSON | JSON5
 
+{-# SPECIALISE parseJson :: T.Text -> Either String Value #-}
+{-# SPECIALISE parseJson :: TL.Text -> Either String Value #-}
+{-# SPECIALISE parseJson :: String -> Either String Value #-}
 parseJson :: ParseInput s => s -> Either String Value
 parseJson = parseJson' JSON
 
+{-# SPECIALISE parseJson5 :: T.Text -> Either String Value #-}
+{-# SPECIALISE parseJson5 :: TL.Text -> Either String Value #-}
+{-# SPECIALISE parseJson5 :: String -> Either String Value #-}
 parseJson5 :: ParseInput s => s -> Either String Value
 parseJson5 = parseJson' JSON5
 
