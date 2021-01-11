@@ -54,3 +54,21 @@ tests:
     - tasty >= 1.2
     - tasty-hunit >= 0.10
     - text >= 1.2
+
+benchmarks:
+  bench:
+    dependencies:
+    - json5-hs
+    - aeson
+    - bytestring
+    - criterion
+    - directory
+    - filepath
+    - text
+    ghc-options:
+    - -O2
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    main: Main.hs
+    source-dirs: benchmark
