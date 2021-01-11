@@ -92,6 +92,9 @@ jsonFiller mode =
             (C.string "//" *> void (takeWhileP (Just "character") (\c -> c /= '\n' && c /= '\r')))
             (L.skipBlockComment "/*" "*/")
 
+escapePrefix :: ParseInput s => Parser s ()
+escapePrefix = void $ C.char '\\'
+
 jsonP :: ParseInput s => ParseMode -> Parser s Value
 jsonP mode =
   jsonFiller mode *> jsonP' mode
@@ -156,7 +159,7 @@ dictP mode =
 
 identifyerNameP :: ParseInput s => Parser s T.Text
 identifyerNameP = do
-  let identifyerStart = C.letterChar <|> oneOf ("$_" :: String) <|> unicodeChar
+  let identifyerStart = C.letterChar <|> oneOf ("$_" :: String) <|> (escapePrefix *> unicodeChar)
       identifierPart = identifyerStart <|> C.digitChar
   first <- identifyerStart
   rest <- many identifierPart
@@ -239,19 +242,19 @@ stringP mode =
 
 singleCharJSON :: ParseInput s => Parser s TLB.Builder
 singleCharJSON =
-  (C.string "\\\"" $> "\"")
-    <|> (C.string "\\\\" $> "\\")
-    <|> (C.string "\\/" $> "/")
-    <|> (C.string "\\b" $> "\b")
-    <|> (C.string "\\f" $> "\f")
-    <|> (C.string "\\n" $> "\n")
-    <|> (C.string "\\r" $> "\r")
-    <|> (C.string "\\t" $> "\t")
+  (C.char '\"' $> "\"")
+    <|> (C.char '\\' $> "\\")
+    <|> (C.char '/' $> "/")
+    <|> (C.char 'b' $> "\b")
+    <|> (C.char 'f' $> "\f")
+    <|> (C.char 'n' $> "\n")
+    <|> (C.char 'r' $> "\r")
+    <|> (C.char 't' $> "\t")
     <|> fmap TLB.singleton unicodeChar
 
 charsJSON :: forall s. ParseInput s => Parser s TLB.Builder
 charsJSON =
-  singleCharJSON
+  (escapePrefix *> singleCharJSON)
     <|> fmap
       (toBuilder (Proxy @s))
       (takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
@@ -259,30 +262,29 @@ charsJSON =
 singleCharJSON5 :: ParseInput s => Parser s TLB.Builder
 singleCharJSON5 =
   singleCharJSON
-    <|> (C.string "\\\'" $> "\'")
-    <|> (C.string "\\\0" $> "\0")
-    <|> (C.string "\\\v" $> "\v")
-    <|> (C.string "\\\r\n" $> "")
-    <|> (C.string "\\\r" $> "")
-    <|> (C.string "\\\n" $> "")
+    <|> (C.char '\'' $> "\'")
+    <|> (C.char '\0' $> "\0")
+    <|> (C.char '\v' $> "\v")
+    <|> (C.char '\r' *> optional (C.char '\n') $> "")
+    <|> (C.char '\n' $> "")
 
 charsDouble :: forall s. ParseInput s => Parser s TLB.Builder
 charsDouble =
-  singleCharJSON5
+  (escapePrefix *> singleCharJSON5)
     <|> fmap
       (toBuilder (Proxy @s))
       (takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
 
 charsSingle :: forall s. ParseInput s => Parser s TLB.Builder
 charsSingle =
-  singleCharJSON5
+  (escapePrefix *> singleCharJSON5)
     <|> fmap
       (toBuilder (Proxy @s))
       (takeWhile1P Nothing (\c -> not (c == '\'' || c == '\\' || (c <= chr 0x1f && isControl c))))
 
 unicodeChar :: ParseInput s => Parser s Char
 unicodeChar = do
-  void $ C.string "\\u"
+  void $ C.char 'u'
   u1 <- fmap digitToInt C.hexDigitChar
   u2 <- fmap digitToInt C.hexDigitChar
   u3 <- fmap digitToInt C.hexDigitChar
