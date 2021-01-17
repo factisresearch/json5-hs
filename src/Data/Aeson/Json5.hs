@@ -35,15 +35,15 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 data ParseMode = JSON | JSON5
 
-{-# SPECIALISE parseJson :: T.Text -> Either String Value #-}
-{-# SPECIALISE parseJson :: TL.Text -> Either String Value #-}
-{-# SPECIALISE parseJson :: String -> Either String Value #-}
+{-# SPECIALIZE parseJson :: T.Text -> Either String Value #-}
+{-# SPECIALIZE parseJson :: TL.Text -> Either String Value #-}
+{-# SPECIALIZE parseJson :: String -> Either String Value #-}
 parseJson :: ParseInput s => s -> Either String Value
 parseJson = parseJson' JSON
 
-{-# SPECIALISE parseJson5 :: T.Text -> Either String Value #-}
-{-# SPECIALISE parseJson5 :: TL.Text -> Either String Value #-}
-{-# SPECIALISE parseJson5 :: String -> Either String Value #-}
+{-# SPECIALIZE parseJson5 :: T.Text -> Either String Value #-}
+{-# SPECIALIZE parseJson5 :: TL.Text -> Either String Value #-}
+{-# SPECIALIZE parseJson5 :: String -> Either String Value #-}
 parseJson5 :: ParseInput s => s -> Either String Value
 parseJson5 = parseJson' JSON5
 
@@ -164,7 +164,7 @@ dictP mode =
            )
 
 identifyerNameP :: ParseInput s => Parser s T.Text
-identifyerNameP = do
+identifyerNameP = label "ES5 IdentifierName" $ do
   let identifyerStart = C.letterChar <|> oneOf ("$_" :: String) <|> (escapePrefix *> unicodeChar)
       identifierPart = identifyerStart <|> C.digitChar
   first <- identifyerStart
@@ -189,7 +189,6 @@ numberP mode = do
       JSON -> numberRegular JSON
       JSON5 ->
         (C.string' "0x" *> L.hexadecimal)
-          <|> (C.string' "-0x" *> fmap negate L.hexadecimal)
           <|> numberRegular JSON5
 
 data SignMode = OnlyNegative | AllowPositive
@@ -203,7 +202,7 @@ signP mode =
 numberRegular :: forall s. ParseInput s => ParseMode -> Parser s Scientific
 numberRegular mode = do
   let nonZeroLeadingInt :: Num i => Parser s i
-      nonZeroLeadingInt = (C.char '0' $> 0) <|> L.decimal
+      nonZeroLeadingInt = label "integer (without leading 0)" $ (C.char '0' $> 0) <|> L.decimal
   let parseFractional = do
         offsetBefore <- getOffset
         fractionalInts <- L.decimal
@@ -263,7 +262,7 @@ charsJSON =
   (escapePrefix *> singleCharJSON)
     <|> fmap
       (toBuilder (Proxy @s))
-      (takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
+      (label "unescaped char" $ takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
 
 singleCharJSON5 :: ParseInput s => Parser s TLB.Builder
 singleCharJSON5 =
@@ -279,14 +278,14 @@ charsDouble =
   (escapePrefix *> singleCharJSON5)
     <|> fmap
       (toBuilder (Proxy @s))
-      (takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
+      (label "unescaped char" $ takeWhile1P Nothing (\c -> not (c == '"' || c == '\\' || (c <= chr 0x1f && isControl c))))
 
 charsSingle :: forall s. ParseInput s => Parser s TLB.Builder
 charsSingle =
   (escapePrefix *> singleCharJSON5)
     <|> fmap
       (toBuilder (Proxy @s))
-      (takeWhile1P Nothing (\c -> not (c == '\'' || c == '\\' || (c <= chr 0x1f && isControl c))))
+      (label "unescaped char" $ takeWhile1P Nothing (\c -> not (c == '\'' || c == '\\' || (c <= chr 0x1f && isControl c))))
 
 unicodeChar :: ParseInput s => Parser s Char
 unicodeChar = do
