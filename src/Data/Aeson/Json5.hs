@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -8,7 +9,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-
 module Data.Aeson.Json5
   ( parseJson,
     parseJson5,
@@ -53,7 +53,13 @@ parseJson' mode s =
     Left e -> Left (errorBundlePretty e)
     Right x -> Right x
 
-class (Stream s, Token s ~ Char, IsString (Tokens s), FoldCase (Tokens s)) => ParseInput s where
+class (
+  #if MIN_VERSION_megaparsec(9,0,0)
+  VisualStream s, TraversableStream s,
+  #else
+  Stream s,
+  #endif
+  Token s ~ Char, IsString (Tokens s), FoldCase (Tokens s)) => ParseInput s where
   toBuilder :: Proxy s -> Tokens s -> TLB.Builder
 
 instance ParseInput T.Text where
