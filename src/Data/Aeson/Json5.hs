@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -54,11 +53,7 @@ parseJson' mode s =
     Right x -> Right x
 
 class (
-  #if MIN_VERSION_megaparsec(9,0,0)
   VisualStream s, TraversableStream s,
-  #else
-  Stream s,
-  #endif
   Token s ~ Char, IsString (Tokens s), FoldCase (Tokens s)) => ParseInput s where
   toBuilder :: Proxy s -> Tokens s -> TLB.Builder
 
