@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0f25dde253d9cea87f5986228b39943b0d587e33026b4aca324ce6fbcab71b20
+-- hash: aa6f4fb60b5590ab54325ecd21042305021de99325f751c02e79131cee7a833e
 
 name:           json5-hs
 version:        0.1.0.0
@@ -34,7 +34,7 @@ library
       src
   ghc-options: -Wall -Werror
   build-depends:
-      aeson >=1.4.0.0
+      aeson >=2.0.0.0
     , base >=4.7 && <5
     , case-insensitive >=1.2
     , megaparsec >=9.0.0
@@ -53,7 +53,7 @@ test-suite json5-hs-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall -Werror
   build-depends:
-      aeson >=1.4.0.0
+      aeson >=2.0.0.0
     , base >=4.7 && <5
     , bytestring >=0.10
     , case-insensitive >=1.2

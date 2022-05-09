@@ -7,13 +7,13 @@ packages:
 - completed:
     hackage: hs-duktape-1.0.0@sha256:cf0ff26f96ef5a79d9e8230d5e6eef296dd1bee306151a2e4f133a05e2ab469b,1866
     pantry-tree:
-      size: 747
       sha256: 7139ff5aea172a26d5724769a9ae75fb3738dbc9038ec4d6a89fa5f79b6e9872
+      size: 747
   original:
     hackage: hs-duktape-1.0.0
 snapshots:
 - completed:
-    size: 567677
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/17/14.yaml
-    sha256: 3740f22286bf5e6e3d82f88125e1c708b6e27847211f956b530aa5d83cf39383
-  original: lts-17.14
+    sha256: bbf2be02f17940bac1f87cb462d4fb0c3355de6dcfc53d84f4f9ad3ee2164f65
+    size: 616897
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/0.yaml
+  original: lts-19.0

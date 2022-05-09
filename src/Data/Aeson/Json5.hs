@@ -19,7 +19,6 @@ import Data.Bits
 import Data.CaseInsensitive
 import Data.Char
 import Data.Functor
-import qualified Data.HashMap.Strict as HM
 import Data.Proxy
 import Data.Scientific (Scientific, base10Exponent, coefficient, scientific)
 import Data.String
@@ -31,6 +30,7 @@ import Data.Void
 import Text.Megaparsec
 import qualified Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
+import Data.Aeson.Key (fromText)
 
 data ParseMode = JSON | JSON5
 
@@ -135,7 +135,7 @@ arrayP mode =
            )
           <* C.char ']'
 
-dictP :: ParseInput s => ParseMode -> Parser s Object
+dictP :: forall s. ParseInput s => ParseMode -> Parser s Object
 dictP mode =
   let dictKeyPair = do
         key <-
@@ -145,23 +145,24 @@ dictP mode =
         jsonFiller mode
         void $ C.char ':'
         val <- jsonP mode
-        return (key, val)
+        return (fromText key .= val)
+      nonEmptyContents :: Object -> Parser s Object
       nonEmptyContents !acc = do
         jsonFiller mode
-        let closing = C.char '}' $> HM.fromList acc
+        let closing = C.char '}' $> acc
         case mode of
           JSON ->
-            (C.char ',' *> jsonFiller JSON *> dictKeyPair >>= nonEmptyContents . flip (:) acc)
+            (C.char ',' *> jsonFiller JSON *> dictKeyPair >>= nonEmptyContents . (<> acc))
               <|> closing
           JSON5 -> do
             mC <- optional $ C.char ',' *> jsonFiller JSON5
             case mC of
               Nothing -> closing
-              Just _ -> (dictKeyPair >>= nonEmptyContents . flip (:) acc) <|> closing
+              Just _ -> (dictKeyPair >>= nonEmptyContents . (<> acc)) <|> closing
    in C.char '{'
         *> jsonFiller mode
-        *> ( (dictKeyPair >>= nonEmptyContents . (: []))
-               <|> HM.empty <$ C.char '}'
+        *> ( (dictKeyPair >>= nonEmptyContents)
+               <|> mempty <$ C.char '}'
            )
 
 identifyerNameP :: ParseInput s => Parser s T.Text
